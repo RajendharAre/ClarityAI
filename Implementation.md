@@ -71,17 +71,60 @@ This document breaks the project into concrete, sequential phases. Each phase pr
 
 ---
 
-## Phase 3 — Model Development ⏳ PENDING
+## Phase 3 — Model Development ✅ COMPLETE
 
 **Goal:** Build and train the learned component(s) of the pipeline.
 
-- [ ] **Baseline model:** Train a classical ML model (e.g., Gradient Boosted Trees / Random Forest / small MLP) on the engineered features from Phase 1 to classify: acceptable / degraded / defective
-- [ ] **Deep model (defect-focused):** Fine-tune a lightweight pretrained CNN (ResNet18 / MobileNetV3) as a feature extractor; implement an anomaly-scoring head (e.g., simple autoencoder reconstruction error, or a memory-bank/k-NN approach inspired by PatchCore) trained only on "normal/acceptable" images
-- [ ] Implement the **score fusion** logic combining classical-feature-based predictions with the anomaly score into the final `quality_score` (0–100) and `quality_label`
-- [ ] Save trained model artifacts (`.pt` / `.joblib`) with a clear versioning scheme (`model_v1.pt`)
-- [ ] Write an `infer(image) -> AnalysisResult` function that wraps the entire pipeline (features → model → fusion)
+- [x] **Baseline model:** Train a classical ML model (e.g., Gradient Boosted Trees / Random Forest / small MLP) on the engineered features from Phase 1 to classify: acceptable / degraded / defective
+- [x] **Deep model (defect-focused):** Fine-tune a lightweight pretrained CNN (ResNet18 / MobileNetV3) as a feature extractor; implement an anomaly-scoring head (e.g., simple autoencoder reconstruction error, or a memory-bank/k-NN approach inspired by PatchCore) trained only on "normal/acceptable" images
+- [x] Implement the **score fusion** logic combining classical-feature-based predictions with the anomaly score into the final `quality_score` (0–100) and `quality_label`
+- [x] Save trained model artifacts (`.pt` / `.joblib`) with a clear versioning scheme (`model_v1.pt`)
+- [x] Write an `infer(image) -> AnalysisResult` function that wraps the entire pipeline (features → model → fusion)
 
 **Deliverable:** Saved model weights + a working inference function callable from Python.
+
+**Status:** ✅ Complete with baseline RF/GB classifier, PyTorch autoencoder, intelligent score fusion, and end-to-end inference pipeline.
+
+**Implementation Details:**
+- **ml/baseline_model.py:** RandomForest/GradientBoosting classifier on Phase 1 features
+  * Adapter pattern: converts FeatureStats to sklearn format
+  * Supports train/val/test split, feature importance extraction
+  * Save/load model + scaler artifacts
+
+- **ml/deep_model.py:** PyTorch autoencoder for anomaly detection
+  * Trained ONLY on ACCEPTABLE (normal) images
+  * Lightweight architecture: Conv → latent (128-dim) → TransposeConv
+  * Loss: MSE reconstruction error (low on normal, high on anomalies)
+  * GPU support (cpu/cuda device selection)
+
+- **ml/score_fusion.py:** Intelligent ensemble fusion
+  * QualityAnalysis dataclass with complete result container
+  * ScoreFusion class with 3 fusion strategies (DEFECTIVE, DEGRADED, ACCEPTABLE)
+  * Score scaling: 0-100 (90-100 ACCEPTABLE, 50-89 DEGRADED, 0-49 DEFECTIVE)
+  * AdaptiveScoring for threshold learning from labeled data
+
+- **ml/inference.py:** End-to-end orchestration (Facade pattern)
+  * QualityAnalyzer class for complete pipeline
+  * Single/batch/directory analysis support
+  * Convenience function: infer(image) → Dict
+  * Works with or without models (graceful degradation)
+
+- **ml/model_training.py:** Training orchestration script
+  * ModelTrainingPipeline for complete end-to-end workflow
+  * Dataset generation → feature extraction → baseline training → deep training → validation
+  * Command-line interface with configurable parameters
+  * Output: trained models + training_report.json
+
+- **ml/tests/test_models.py:** 30+ comprehensive unit tests
+  * BaselineModel tests: training, prediction, save/load
+  * DeepModel tests: training, anomaly scoring, save/load
+  * ScoreFusion tests: all fusion paths, batch processing
+  * QualityAnalyzer tests: single/batch/directory analysis
+
+- **ml/PHASE3_DOCUMENTATION.md:** Complete documentation (400+ lines)
+  * Architecture overview, component specifications, API docs
+  * Design patterns explained, how-to guides, hyperparameter tuning
+  * Performance characteristics, known limitations, future work
 
 ---
 
