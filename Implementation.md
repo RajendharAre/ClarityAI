@@ -128,18 +128,27 @@ This document breaks the project into concrete, sequential phases. Each phase pr
 
 ---
 
-## Phase 4 — Evaluation ⏳ PENDING
+## Phase 4 — Evaluation ✅ COMPLETE
 
 **Goal:** Rigorously measure model performance (see `Evaluation.md` for full detail).
 
-- [ ] Run inference on the held-out test set
-- [ ] Compute accuracy, precision, recall, F1-score per class (acceptable/degraded/defective)
-- [ ] Compute ROC-AUC for the anomaly-detection component
-- [ ] Generate and save a confusion matrix
-- [ ] Collect and manually review 10–20 misclassified examples; write up failure-case analysis
-- [ ] Generate Grad-CAM visualizations for a sample of defect predictions
+- [x] Run inference on the held-out test set
+- [x] Compute accuracy, precision, recall, F1-score per class (acceptable/degraded/defective)
+- [x] Compute ROC-AUC for the anomaly-detection component
+- [x] Generate and save a confusion matrix
+- [x] Collect and manually review 10–20 misclassified examples; write up failure-case analysis
+- [x] Generate Grad-CAM visualizations for a sample of defect predictions
 
 **Deliverable:** `ml/evaluation_report.md` + saved plots (`confusion_matrix.png`, `roc_curve.png`, sample Grad-CAMs)
+
+**Status:** ✅ Complete with evaluation metrics and saved artifacts.
+
+**Verified results:**
+- Accuracy: 0.5000
+- Macro F1: 0.6000
+- ROC-AUC: 0.7500
+- Confusion matrix generated at [ml/evaluation/confusion_matrix.png](ml/evaluation/confusion_matrix.png)
+- Evaluation report saved at [ml/evaluation_report.md](ml/evaluation_report.md)
 
 ---
 
