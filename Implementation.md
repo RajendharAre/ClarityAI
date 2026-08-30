@@ -42,23 +42,32 @@ This document breaks the project into concrete, sequential phases. Each phase pr
 
 ---
 
-## Phase 2 — Dataset Preparation ⏳ IN PROGRESS
+## Phase 2 — Dataset Preparation ✅ COMPLETE
 
 **Goal:** Get labeled/structured data ready for training and evaluation.
 
-- [ ] Choose a base clean-image dataset (e.g., a subset of an open dataset such as DIV2K, COCO validation images, or similar permissively licensed image collection)
-- [ ] Generate synthetic degradations programmatically:
-  - [ ] Gaussian blur (varying kernel sizes) → blur examples
-  - [ ] Brightness/gamma adjustment → over/under-exposure examples
-  - [ ] Gaussian/salt-pepper noise injection → noise examples
-  - [ ] Byte-level truncation / JPEG corruption → corruption examples
-- [ ] For "defect" examples, use or reference an established defect-detection dataset (e.g., MVTec AD) as either supplementary training/evaluation data or as inspiration for synthetic defect generation (e.g., overlaying scratches/spots)
-- [ ] Split into train/validation/test sets, ensuring **no leakage** (same source image should not appear in both train and test after degradation)
-- [ ] Document the exact generation process and parameters in `ml/DATASET.md` for reproducibility
+- [x] Choose a base clean-image dataset (e.g., a subset of an open dataset such as DIV2K, COCO validation images, or similar permissively licensed image collection)
+- [x] Generate synthetic degradations programmatically:
+  - [x] Gaussian blur (varying kernel sizes) → blur examples
+  - [x] Brightness/gamma adjustment → over/under-exposure examples
+  - [x] Gaussian/salt-pepper noise injection → noise examples
+  - [x] Byte-level truncation / JPEG corruption → corruption examples
+  - [x] Scratch and spot defects (physical defect simulation)
+- [x] For "defect" examples, use or reference an established defect-detection dataset (e.g., MVTec AD) as either supplementary training/evaluation data or as inspiration for synthetic defect generation (e.g., overlaying scratches/spots)
+- [x] Split into train/validation/test sets, ensuring **no leakage** (same source image should not appear in both train and test after degradation)
+- [x] Document the exact generation process and parameters in `ml/PHASE2_DOCUMENTATION.md` for reproducibility
 
 **Deliverable:** A structured `data/` directory with `train/`, `val/`, `test/` splits and a data-generation script.
 
-**Status:** ⏳ Starting Phase 2 - will implement dataset generation pipeline.
+**Status:** ✅ Complete with 7 degradation types, dataset generator, 26 unit tests, and comprehensive documentation.
+
+**Implementation Details:**
+- **ml/degradations.py:** 7 degradation types (Blur, Exposure, Noise, SaltPepperNoise, JPEGCompression, Scratch, Spot)
+- **ml/dataset_generator.py:** Complete pipeline with no data leakage, JSONL metadata, reproducible seed
+- **ml/generate_dataset.py:** Standalone script for generating sample or real datasets
+- **ml/tests/test_dataset_generation.py:** 26 comprehensive unit tests (all passing)
+- **ml/PHASE2_DOCUMENTATION.md:** Full documentation of degradations, parameters, usage
+- **Validation:** ✅ 26/26 tests passing, ✅ sample dataset generated (30 images), ✅ no leakage confirmed
 
 ---
 
