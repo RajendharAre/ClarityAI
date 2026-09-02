@@ -15,10 +15,10 @@ def test_health_endpoint():
 
 
 def test_analyze_endpoint_accepts_upload():
-    with open("../test_image.jpg", "rb") as image_file:
+    with open("../samples/lena_clean.jpg", "rb") as image_file:
         response = client.post(
             "/api/v1/analyze",
-            files={"file": ("test_image.jpg", image_file, "image/jpeg")},
+            files={"file": ("lena_clean.jpg", image_file, "image/jpeg")},
         )
 
     assert response.status_code == 200
