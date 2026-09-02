@@ -179,39 +179,45 @@ class ImageValidator:
         return False, None
 
     @staticmethod
-    def validate_complete(file_path: str) -> Tuple[bool, Optional[str]]:
+    def validate_complete(file_path: str, image: Optional[np.ndarray] = None) -> Tuple[bool, Optional[str]]:
         """
-        Perform complete validation of image file.
-        
+        Perform complete validation of an image, given a file path or array.
+
         Args:
-            file_path: Path to image file
-        
+            file_path: Path to image file (used when image is None)
+            image: Optional pre-loaded image array (avoids re-reading from disk)
+
         Returns:
             Tuple[bool, Optional[str]]: (is_valid, error_message)
         """
         try:
-            # Check file exists
-            if not Path(file_path).exists():
-                return False, f"File not found: {file_path}"
-
-            # Validate extension
-            ImageValidator.validate_file_extension(file_path)
-            logger.debug(f"Extension valid: {file_path}")
-
-            # Validate file size
-            ImageValidator.validate_file_size(file_path)
-            logger.debug(f"File size valid: {file_path}")
-
-            # Validate readability
-            is_readable, error = ImageValidator.validate_image_readability(file_path)
-            if not is_readable:
-                return False, error
-            logger.debug(f"Image readable: {file_path}")
-
-            # Load and check image
-            image = cv2.imread(file_path)
             if image is None:
-                return False, "Failed to load image with OpenCV"
+                # Check file exists
+                if not Path(file_path).exists():
+                    return False, f"File not found: {file_path}"
+
+                # Validate extension
+                ImageValidator.validate_file_extension(file_path)
+                logger.debug(f"Extension valid: {file_path}")
+
+                # Validate file size
+                ImageValidator.validate_file_size(file_path)
+                logger.debug(f"File size valid: {file_path}")
+
+                # Validate readability
+                is_readable, error = ImageValidator.validate_image_readability(file_path)
+                if not is_readable:
+                    return False, error
+                logger.debug(f"Image readable: {file_path}")
+
+                # Load image
+                image = cv2.imread(file_path)
+                if image is None:
+                    return False, "Failed to load image with OpenCV"
+            else:
+                # Array input — check content type
+                if not isinstance(image, np.ndarray):
+                    return False, "Image must be a numpy array or file path"
 
             # Validate dimensions
             ImageValidator.validate_image_dimensions(image)
@@ -233,20 +239,21 @@ class ImageValidator:
             return False, f"Unexpected error: {str(e)}"
 
 
-def validate_image(file_path: str) -> bool:
+def validate_image(file_path: str, image: Optional[np.ndarray] = None) -> bool:
     """
-    Quick validation function.
-    
+    Quick validation function. Accepts either a file path or a loaded array.
+
     Args:
-        file_path: Path to image file
-    
+        file_path: Path to image file (or arbitrary label when image is given)
+        image: Optional pre-loaded image array
+
     Returns:
         bool: True if image is valid
-    
+
     Raises:
         ImageValidationError: If validation fails
     """
-    is_valid, error = ImageValidator.validate_complete(file_path)
+    is_valid, error = ImageValidator.validate_complete(file_path, image=image)
     if not is_valid:
         raise ImageValidationError(error or "Image validation failed")
     return True

@@ -6,6 +6,7 @@ Follows Design Principle: Modularity, Interpretability, Reproducibility
 """
 
 import logging
+import cv2
 import numpy as np
 import torch
 import torch.nn as nn
@@ -133,11 +134,35 @@ class DeepModel:
             device = "cuda" if torch.cuda.is_available() else "cpu"
 
         self.device = device
+        self.image_size = 64
         self.model = AutoencoderModel(input_channels=3, latent_dim=128)
         self.model = self.model.to(device)
         self.is_trained = False
 
         logger.info(f"DeepModel initialized on device: {device}")
+
+    def _prepare_images(self, images: np.ndarray) -> np.ndarray:
+        """Normalize and resize images to the model-supported 64x64 resolution."""
+        if images is None or len(images) == 0:
+            raise ValueError("No images provided for deep model processing")
+
+        arr = images
+        if arr.ndim == 3 and arr.shape[-1] == 3:
+            arr = arr[np.newaxis, ...]
+
+        if arr.ndim == 4 and arr.shape[-1] == 3 and arr.shape[1] != 3:
+            arr = np.transpose(arr, (0, 3, 1, 2))
+
+        prepared = []
+        for image in arr:
+            image = image.astype(np.float32)
+            if image.shape[:2] != (self.image_size, self.image_size):
+                image = cv2.resize(image.transpose(1, 2, 0), (self.image_size, self.image_size), interpolation=cv2.INTER_AREA).transpose(2, 0, 1)
+            prepared.append(image)
+
+        prepared = np.stack(prepared, axis=0)
+        prepared = prepared / 255.0 if prepared.max() > 1 else prepared
+        return prepared.astype(np.float32)
 
     def train_model(
         self,
@@ -162,15 +187,8 @@ class DeepModel:
         """
         logger.info(f"Training deep model for {epochs} epochs on {len(X_train)} images")
 
-        # Convert to torch tensors
-        if X_train.shape[-1] == 3 and X_train.shape[1] != 3:
-            # Convert (N, H, W, 3) to (N, 3, H, W)
-            X_train = np.transpose(X_train, (0, 3, 1, 2))
-
-        # Normalize to [0, 1]
-        X_train = X_train.astype(np.float32) / 255.0 if X_train.max() > 1 else X_train.astype(
-            np.float32
-        )
+        # Convert to torch tensors and resize to the decoder-supported size
+        X_train = self._prepare_images(X_train)
 
         # Split validation
         val_idx = int(len(X_train) * (1 - val_split))
@@ -245,14 +263,7 @@ class DeepModel:
         if not self.is_trained:
             raise RuntimeError("Model not trained")
 
-        # Convert format if needed
-        if images.ndim == 4 and images.shape[-1] == 3 and images.shape[1] != 3:
-            images = np.transpose(images, (0, 3, 1, 2))
-
-        # Normalize
-        images = images.astype(np.float32) / 255.0 if images.max() > 1 else images.astype(
-            np.float32
-        )
+        images = self._prepare_images(images)
 
         self.model.eval()
         scores = []

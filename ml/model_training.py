@@ -167,10 +167,16 @@ class ModelTrainingPipeline:
         if len(acceptable_images) == 0:
             logger.warning("No ACCEPTABLE images found for deep model training!")
 
-        # Convert to array
+        # Convert to array, resizing non-uniform images to a common size first.
+        # Real-world images have varied dimensions, so stack via interpolation.
         if acceptable_images:
-            # Convert (H, W, 3) → (N, H, W, 3)
-            acceptable_images = np.array(acceptable_images)
+            resized = []
+            for img in acceptable_images:
+                h, w = img.shape[:2]
+                if (h, w) != (64, 64):
+                    img = cv2.resize(img, (64, 64), interpolation=cv2.INTER_AREA)
+                resized.append(img)
+            acceptable_images = np.stack(resized, axis=0)
 
         return acceptable_images, [0] * len(acceptable_images)
 
@@ -210,13 +216,13 @@ class ModelTrainingPipeline:
     ) -> DeepModel:
         """
         Train deep model.
-        
+
         Args:
-            X_train: Training images (N, H, W, 3)
+            X_train: Training images (N, H, W, 3) - ACCEPTABLE (clean) only
             epochs: Number of epochs
             batch_size: Batch size
             device: "cpu" or "cuda"
-        
+
         Returns:
             Trained DeepModel
         """
@@ -228,7 +234,42 @@ class ModelTrainingPipeline:
         logger.info(f"Deep model training history: {history}")
 
         model.save(str(self.models_dir))
+
+        # Calibrate anomaly-score thresholds from the normal (clean) training
+        # distribution so the fusion logic can correctly gate ACCEPTABLE.
+        self._calibrate_and_save_anomaly_thresholds(model, X_train)
+
         return model
+
+    def _calibrate_and_save_anomaly_thresholds(
+        self, deep_model: DeepModel, X_acceptable: np.ndarray
+    ) -> None:
+        """
+        Compute anomaly scores on the clean training images and persist the
+        calibrated absolute thresholds for later use at inference time.
+
+        Thresholds: low = mean + 2*std, moderate = mean + 3*std,
+                    high = mean + 4*std of the normal-score distribution.
+        """
+        from ml.score_fusion import ScoreFusion
+
+        fusion = ScoreFusion()
+        try:
+            scores = deep_model.compute_anomaly_score(X_acceptable)
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"Could not calibrate anomaly thresholds: {e}")
+            return
+
+        fusion.set_anomaly_distribution(scores)
+        thresholds = fusion.get_absolute_thresholds()
+        if thresholds is None:
+            logger.warning("Anomaly threshold calibration produced no thresholds")
+            return
+
+        path = self.models_dir / "anomaly_thresholds.json"
+        with open(path, "w") as f:
+            json.dump(thresholds, f, indent=2)
+        logger.info(f"Saved calibrated anomaly thresholds to {path}: {thresholds}")
 
     def run_full_pipeline(
         self,

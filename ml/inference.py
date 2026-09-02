@@ -17,8 +17,20 @@ from ml.image_validation import validate_image, ImageValidationError
 from ml.baseline_model import BaselineModel
 from ml.deep_model import DeepModel
 from ml.score_fusion import ScoreFusion, QualityAnalysis
+from ml.issue_detectors import IssueAnalyzer
 
 logger = logging.getLogger(__name__)
+
+# Binary "usable / not-usable" gate.
+# An image is considered USABLE only if no per-issue detector reports a
+# measurable issue (severity below this threshold). The threshold is set to the
+# measured severity ceiling of clean REAL photos across many unseen sources
+# (~0.28; driven by naturally bright/textured scenes). A lower value was tuned
+# on only the 12 training sources and wrongly rejected ~50-71% of real clean
+# photos. At 0.30 the gate never rejects a real good photo while still catching
+# every severe degradation (heavy blur/bright/underexpose/noise all exceed it;
+# genuine low-light exposure reached 0.39+).
+USABLE_SEVERITY_THRESHOLD = 0.30
 
 
 class QualityAnalyzer:
@@ -65,9 +77,27 @@ class QualityAnalyzer:
             self.deep_model = DeepModel.load(deep_model_path, device=device)
             logger.info(f"Loaded deep model from {deep_model_path}")
 
+        # Load calibrated anomaly thresholds if present (saved by training)
+        self._load_anomaly_thresholds(baseline_model_path, deep_model_path)
+
         self.is_ready = self.baseline_model is not None and self.deep_model is not None
         if not self.is_ready:
             logger.warning("Not all models loaded. Some predictions may be incomplete.")
+
+    def _load_anomaly_thresholds(self, baseline_model_path, deep_model_path) -> None:
+        """
+        Load persisted anomaly-score thresholds and configure the fusion logic.
+
+        Thresholds are stored alongside the deep model by the training pipeline.
+        """
+        if deep_model_path:
+            thr_path = Path(deep_model_path).parent / "anomaly_thresholds.json"
+            if thr_path.exists():
+                import json as _json
+                with open(thr_path) as _f:
+                    thresholds = _json.load(_f)
+                self.fusion.set_absolute_thresholds(thresholds)
+                logger.info(f"Loaded calibrated anomaly thresholds from {thr_path}")
 
     def analyze_image(
         self,
@@ -98,7 +128,7 @@ class QualityAnalyzer:
 
         # Validate image
         try:
-            validate_image(image)
+            validate_image("image", image=image)
         except ImageValidationError as e:
             logger.warning(f"Image validation warning: {e}")
             # Continue anyway (validation is best-effort)
@@ -133,6 +163,14 @@ class QualityAnalyzer:
                 anomaly_scores = self.deep_model.compute_anomaly_score(image_batch)
                 anomaly_score = float(anomaly_scores[0])
 
+        # Per-issue detectors (Approach A): the reliable, content-aware signal.
+        # Each detector targets one issue type (blur/exposure/noise/defect) with
+        # a content-normalized metric, unlike the content-fragile 6-feature model.
+        issue_analyzer = IssueAnalyzer()
+        issue_result = issue_analyzer.to_dict(image, anomaly_score=anomaly_score)
+        issues = issue_result["issues"]
+        issue_qscore = issue_result["quality_score"]
+
         # Feature breakdown
         feature_breakdown = {
             "sharpness": float(feature_stats.sharpness),
@@ -143,13 +181,81 @@ class QualityAnalyzer:
             "texture_complexity": float(feature_stats.texture_complexity),
         }
 
-        # Fuse predictions
+        # Fuse predictions (baseline + anomaly) for the legacy fields
         quality_analysis = self.fusion.fuse_predictions(
             baseline_label=baseline_label,
             baseline_confidence=baseline_confidence,
             anomaly_score=anomaly_score,
             features=feature_breakdown if return_details else None,
         )
+
+        # Override the aggregated score/label with the per-issue result: the
+        # per-issue detectors reliably separate clean from degraded, so they are
+        # authoritative. Keep the legacy fields for backward compatibility.
+        qscore = issue_qscore
+        issues_present = [i for i in issues if i["present"]]
+
+        # Semantically principled bands:
+        #   ACCEPTABLE  -> no significant issues (score high)
+        #   DEGRADED    -> >=1 noticeable issue, but the frame is still useable
+        #                  (a single severe blur/noise is degraded, not broken)
+        #   DEFECTIVE   -> multiple concurrent significant issues, OR one
+        #                  extreme/catastrophic issue (frame effectively unusable)
+        significant = [i for i in issues if i["severity"] >= 0.4]
+        worst_sev = max((i["severity"] for i in issues), default=0.0)
+
+        # --- Binary "usable / not-usable" gate (the reliable product signal) ---
+        # Based ONLY on the reliable, content-aware detectors (blur, noise,
+        # exposure, jpeg-blockiness). The deep anomaly/defect channel is
+        # intentionally excluded from this gate: it is trained on very few
+        # clean real sources and catastrophically misfires on unseen photograph
+        # content (e.g. it flags the clean `basketball` source as defective at
+        # severity 0.5), so using it here would reject perfectly good frames.
+        #
+        # Each detector has its OWN threshold, calibrated against the measured
+        # real-clean ceiling for that detector (see below) so that genuine
+        # clean photographs are never rejected while detected issues are.
+        #   - blur:     0.30  (clean real ceiling ~0.28, e.g. `fruits`)
+        #   - noise:    0.30  (clean real ceiling ~0.20, e.g. `baboon`)
+        #   - exposure: 0.30  (clean real ceiling ~0.20, e.g. bright `aloeL`,
+        #                      dark `messi5` ~0.15)
+        #   - jpeg:     0.20  (clean real ceiling ~0.09; re-encoding an
+        #                      uncompressed source reliably exceeds ~0.29)
+        per_detector_threshold = {
+            "blur": USABLE_SEVERITY_THRESHOLD,
+            "noise": USABLE_SEVERITY_THRESHOLD,
+            "exposure": USABLE_SEVERITY_THRESHOLD,
+            "jpeg": 0.20,
+        }
+        reliable_sev = [
+            i for i in issues
+            if i["issue_type"] in per_detector_threshold
+        ]
+        not_usable = any(
+            i["severity"] >= per_detector_threshold[i["issue_type"]]
+            for i in reliable_sev
+        )
+        usable = not not_usable
+
+        if qscore >= 80 and not significant:
+            label = "ACCEPTABLE"
+            confidence = 0.9 if not issues_present else 0.7
+            reasoning = "No significant quality issues detected."
+        elif len(significant) >= 2 or worst_sev >= 0.95:
+            label = "DEFECTIVE"
+            confidence = 0.85
+            reasons = ", ".join(sorted({i["issue_type"] for i in significant})) or "severe quality problems"
+            reasoning = f"Defective due to: {reasons}"
+        else:
+            label = "DEGRADED"
+            confidence = 0.7
+            reasoning = "Quality degraded by: " + ", ".join(i["issue_type"] for i in issues_present)
+        quality_analysis.quality_label = label
+        quality_analysis.quality_score = float(qscore)
+        quality_analysis.confidence = float(confidence)
+        quality_analysis.reasoning = reasoning
+        quality_analysis.issues = issues
+        quality_analysis.usable = bool(usable)
 
         logger.info(
             f"Analysis complete: {quality_analysis.quality_label} "

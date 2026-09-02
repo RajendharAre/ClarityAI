@@ -106,7 +106,8 @@ def evaluate_baseline(X_test, y_test):
 
 def evaluate_deep(images, y_test):
     deep_model = DeepModel.load(str(MODELS_DIR / "deep_model_autoencoder_v1.pt"), device="cpu")
-    image_batch = np.stack(images)
+    # Real-world test images have varied dimensions; normalize to the model size
+    image_batch = np.stack([cv2.resize(img, (64, 64), interpolation=cv2.INTER_AREA) for img in images])
     if image_batch.ndim == 4 and image_batch.shape[-1] == 3 and image_batch.shape[1] != 3:
         image_batch = np.transpose(image_batch, (0, 3, 1, 2))
 

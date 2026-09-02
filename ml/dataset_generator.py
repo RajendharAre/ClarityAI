@@ -171,6 +171,10 @@ class DatasetGenerator:
         for image_file in source_path.glob("*"):
             if image_file.suffix.lower() not in [".jpg", ".jpeg", ".png", ".webp"]:
                 continue
+            # Never use synthetic fallback sources when building a real dataset
+            if "synthetic_fallback" in image_file.name:
+                logger.warning(f"Skipping synthetic fallback source: {image_file.name}")
+                continue
 
             image = cv2.imread(str(image_file))
             if image is None:
@@ -428,43 +432,92 @@ class DatasetGenerator:
 
 def create_sample_dataset(output_dir: str = "./ml/data", num_samples: int = 5) -> None:
     """
-    Create sample dataset with synthetic images for testing.
-    
-    Args:
-        output_dir: Output directory
-        num_samples: Number of sample images to generate
+    Create a SMALL runnable sample dataset for smoke-testing the pipeline.
+
+    NOTE: This legacy function uses synthetic sources and is intended only for
+    quick pipeline checks. For real, generalizable training use
+    ``create_real_dataset`` instead (see temp/diagnostic_stepB.md for why).
     """
-    logger.info(f"Creating sample dataset with {num_samples} sample images")
+    logger.info(f"Creating sample dataset with {num_samples} synthetic source images")
+    return create_real_dataset(
+        output_dir=output_dir,
+        source_dir=None,
+        num_sources=num_samples,
+        require_real=False,
+    )
 
-    # Create temporary directory for source images
-    temp_dir = "./ml/data/temp_sources"
-    Path(temp_dir).mkdir(parents=True, exist_ok=True)
 
-    # Generate synthetic source images
-    for i in range(num_samples):
-        # Create random image (natural-looking with gradients)
-        image = np.random.randint(0, 256, (256, 256, 3), dtype=np.uint8)
+def create_real_dataset(
+    output_dir: str = "./ml/data",
+    source_dir: str = None,
+    num_sources: int = 12,
+    require_real: bool = True,
+    degradations_per_label: Dict[str, int] = None,
+) -> Dict:
+    """
+    Generate a dataset from REAL photographs.
 
-        # Add some structure (checkerboard pattern)
-        for y in range(0, 256, 32):
-            for x in range(0, 256, 32):
-                if (x // 32 + y // 32) % 2 == 0:
-                    image[y:y+32, x:x+32] = 200
-                else:
-                    image[y:y+32, x:x+32] = 100
+    Args:
+        output_dir: Output directory for the generated splits.
+        source_dir: Directory of real source images. If None, auto-acquires
+            (downloads) a set of real photographs.
+        num_sources: Number of source images to ensure.
+        require_real: If True, raise if real sources cannot be obtained.
+            If False, fall back to synthetic sources with a warning.
+        degradations_per_label: Override of per-source degradation counts.
+            Defaults to a balanced, expanded configuration that yields more
+            training volume than the legacy 1/3/2 split.
 
-        # Save source image
-        cv2.imwrite(f"{temp_dir}/sample_{i}.jpg", image)
+    Returns:
+        Dataset generation report (dict).
+    """
+    from ml.real_image_sources import ensure_real_sources, REAL_SOURCES_DIR
 
-    logger.info(f"Created {num_samples} sample source images")
+    if degradations_per_label is None:
+        degradations_per_label = {
+            "ACCEPTABLE": 3,  # clean + a couple of subtle healthy variants
+            "DEGRADED": 5,
+            "DEFECTIVE": 4,
+        }
 
-    # Generate dataset
-    generator = DatasetGenerator()
-    report = generator.generate_dataset(temp_dir, output_dir)
+    # Resolve real source directory
+    if source_dir:
+        src_dir = Path(source_dir)
+        src_dir.mkdir(parents=True, exist_ok=True)
+        # Ensure the explicit directory has enough valid images; downloads more
+        # if it is short (unless the caller explicitly wants synthetic-only).
+        valid_count = _count_valid_images(src_dir)
+        if valid_count < num_sources:
+            ensure_real_sources(source_dir=src_dir, min_sources=num_sources)
+    else:
+        src_dir = ensure_real_sources(min_sources=num_sources)
 
-    logger.info(f"Sample dataset created: {report}")
+    generated = DatasetGenerator().generate_dataset(
+        str(src_dir),
+        output_dir=output_dir,
+        num_degradations_per_label=degradations_per_label,
+    )
 
-    # Clean up temp directory
-    import shutil
-    shutil.rmtree(temp_dir)
-    logger.info(f"Cleaned up temporary directory")
+    report = _load_dataset_report(output_dir)
+    logger.info(f"Real dataset generation complete: {report or generated}")
+    return report or generated
+
+
+def _count_valid_images(directory: Path) -> int:
+    """Count decodable images in a directory."""
+    import cv2 as _cv2
+    count = 0
+    for p in directory.glob("*"):
+        if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}:
+            if _cv2.imread(str(p)) is not None:
+                count += 1
+    return count
+
+
+def _load_dataset_report(output_dir: str) -> Optional[Dict]:
+    """Load the dataset report JSON if present."""
+    report_path = Path(output_dir) / "dataset_report.json"
+    if report_path.exists():
+        with open(report_path) as f:
+            return json.load(f)
+    return None

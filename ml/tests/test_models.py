@@ -338,6 +338,55 @@ class TestQualityAnalyzer:
             results = analyzer.analyze_directory(tmpdir)
             assert len(results) == 3
 
+    def _clean_photo(self):
+        """A sharp, low-noise, well-exposed (mean-L ~= ideal) synthetic photo."""
+        img = np.zeros((256, 256, 3), dtype=np.uint8)
+        for y in range(256):
+            img[y, :, 0] = 90 + y // 4
+            img[y, :, 1] = 105 + (140 - y) // 5
+            img[y, :, 2] = 110
+        cv2.rectangle(img, (60, 60), (180, 180), (205, 205, 205), -1)
+        return img
+
+    def test_usable_gate_clean_is_usable(self):
+        """A clean, well-exposed, low-noise photo must be flagged USABLE."""
+        from ml.issue_detectors import BlurDetector, ExposureDetector, NoiseDetector
+        img = self._clean_photo()
+        # validate it is genuinely clean under the reliable detectors
+        assert BlurDetector().detect(img).severity < 0.05
+        assert NoiseDetector().detect(img).severity < 0.05
+        assert ExposureDetector().detect(img).severity < 0.05
+        result = QualityAnalyzer().analyze_image(img)
+        assert result.usable is True
+
+    def test_usable_gate_degraded_is_not_usable(self):
+        """Blurred / noisy / badly-exposed photos must be flagged NOT usable."""
+        from ml.degradations import DegradationPipeline
+        img = self._clean_photo()
+        analyzer = QualityAnalyzer()
+        for kind in ["blur", "noise", "exposure"]:
+            pipe = DegradationPipeline()
+            pipe.add_degradation(kind, 0.95)
+            bad = pipe.apply(img)
+            result = analyzer.analyze_image(bad)
+            assert result.usable is False, kind
+
+    def test_jpeg_gate_catches_reencoded_uncompressed(self):
+        """JPEG re-encoding of a textured NATURAL source must flag NOT usable.
+        The JPEG detector gets its own lower threshold (0.20) than blur/noise/
+        exposure (0.30), calibrated to real-clean JPEG blockiness <= 0.09.
+        Note: blockiness only fires on textured content (like real photos);
+        smooth synthetic images carry no macroblock-seam signal (same blind
+        zone as the real `box` source), so we use a textured source here."""
+        from ml.degradations import JPEGCompressionDegradation
+        rng = np.random.default_rng(0)
+        texture = cv2.GaussianBlur(
+            rng.integers(0, 256, (200, 200, 3), dtype=np.uint8), (3, 3), 0)
+        jpeg_bad = JPEGCompressionDegradation().apply(texture, 0.6)
+        result = QualityAnalyzer().analyze_image(jpeg_bad)
+        assert result.usable is False
+
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
