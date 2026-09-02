@@ -101,7 +101,7 @@ Thumbs.db
 *.bak
 
 # ==== Docker ====
-.dockerignore
+# .dockerignore intentionally tracked
 
 # ==== Misc ====
 .coverage
