@@ -356,9 +356,11 @@ def infer(image: Union[str, np.ndarray]) -> Dict[str, Any]:
     Returns:
         Dictionary with quality assessment
     """
-    # Try to load models from default locations
-    baseline_model_path = "./ml/models/baseline_model_random_forest_v1.joblib"
-    deep_model_path = "./ml/models/deep_model_autoencoder_v1.pt"
+    # Resolve model paths relative to the ml package, not CWD,
+    # so inference works regardless of where the server is started from.
+    _ML_DIR = Path(__file__).resolve().parent
+    baseline_model_path = str(_ML_DIR / "models" / "baseline_model_random_forest_v1.joblib")
+    deep_model_path = str(_ML_DIR / "models" / "deep_model_autoencoder_v1.pt")
 
     analyzer = QualityAnalyzer(
         baseline_model_path=baseline_model_path if Path(baseline_model_path).exists() else None,

@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from uuid import uuid4
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
@@ -53,7 +54,7 @@ async def analyze_image(file: UploadFile = File(...)):
     upload_dir = Path(settings.upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)
 
-    destination = upload_dir / file.filename
+    destination = upload_dir / f"{uuid4().hex[:12]}_{file.filename}"
     contents = await file.read()
     if len(contents) > settings.max_file_size:
         raise HTTPException(status_code=400, detail="File exceeds max upload size")
