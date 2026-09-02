@@ -4,6 +4,7 @@ Handles environment-based settings using Pydantic BaseSettings.
 Follows Design Principle: Separation of Concerns
 """
 
+from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 from typing import List
 from functools import lru_cache
@@ -11,6 +12,7 @@ import logging
 
 
 class Settings(BaseSettings):
+    model_config = ConfigDict(env_file=".env", case_sensitive=False)
     """
     Application settings loaded from environment variables.
     All configuration is externalized for portability and security.
@@ -24,7 +26,7 @@ class Settings(BaseSettings):
     # ===== DATABASE =====
     database_url: str = "sqlite:///./clarityai.db"
     db_user: str = "clarityai"
-    db_password: str = "change_me"
+    db_password: str = "change_me_in_production"
     db_name: str = "clarityai_db"
     db_host: str = "localhost"
     db_port: int = 5432
@@ -51,9 +53,20 @@ class Settings(BaseSettings):
     # ===== SECURITY =====
     secret_key: str = "your-secret-key-here"
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    @property
+    def resolved_database_url(self) -> str:
+        """Return the active database URL.
+
+        Default to the app's configured database_url, which remains SQLite for local dev
+        and tests. In production, set DATABASE_URL explicitly to PostgreSQL.
+        """
+        if self.database_url:
+            return self.database_url
+
+        return (
+            f"postgresql+psycopg2://{self.db_user}:{self.db_password}@"
+            f"{self.db_host}:{self.db_port}/{self.db_name}"
+        )
 
     @property
     def cors_origins_list(self) -> List[str]:
