@@ -2,6 +2,20 @@
 
 **A full-stack AI application that evaluates image visual quality and detects defects without external APIs.**
 
+<p align="center">
+  <img src="demos/Clarity_AI_animation.gif" alt="ClarityAI demo" width="720" />
+</p>
+
+---
+
+## ✨ Application Overview
+
+A complete end-to-end pipeline: upload an image, get a **usable / not-usable** verdict with a quality score, per-issue breakdown, and full analysis history.
+
+| Analyze | History | API Docs |
+|:-------:|:-------:|:--------:|
+| <img src="demos/imageAnalysis.png" alt="Image analysis" width="320"/> | <img src="demos/history.png" alt="Analysis history" width="320"/> | <img src="demos/swaggerui.png" alt="Swagger UI" width="320"/> |
+
 ---
 
 ## 🚀 Quick Start
@@ -85,7 +99,8 @@ ClarityAI/
 │
 ├── models/                     # Trained model weights
 ├── docs/                       # Documentation
-├── samples/                    # Sample images
+├── samples/                    # Sample images (clean / blur / jpeg)
+├── demos/                      # GIF + screenshots for the README
 │
 ├── DesignPrinciples.md        # Design principles & patterns
 ├── ProblemStatement.md         # Problem definition
@@ -133,6 +148,16 @@ The system identifies:
 
 **Output:** Quality score (0-100), label (ACCEPTABLE/DEGRADED/DEFECTIVE), a binary **usable / not-usable** gate, and a per-issue breakdown with confidence.
 
+### Sample Inputs
+
+Try these real images from [`samples/`](samples/) — upload them, then check the verdict each one produces:
+
+| Clean (Usable) | Blur (Not usable) | JPEG blocking (Not usable) |
+|:--------------:|:------------------:|:---------------------------:|
+| <img src="samples/lena_clean.jpg" alt="Clean photo" width="240"/> | <img src="samples/lena_blur.jpg" alt="Blurred photo" width="240"/> | <img src="samples/jpeg_blocky.jpg" alt="JPEG artifact photo" width="240"/> |
+
+Triple-check the clean image is accepted as **usable** (the no-false-reject guarantee), while the blur and JPEG examples are correctly rejected.
+
 ---
 
 ## 🎯 Model Performance
@@ -164,7 +189,7 @@ The system ships a **binary usable / not-usable gate** (the primary delivery pro
 | 5 | Backend API | ✅ Complete |
 | 6 | Frontend UI | ✅ Complete |
 | 7 | Docker & deployment | ✅ Complete |
-| 8 | Documentation & polish | 🚧 In Progress |
+| 8 | Documentation & polish | ✅ Complete |
 
 ---
 
