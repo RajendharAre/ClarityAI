@@ -1,0 +1,6 @@
+{
+  "model_type": "autoencoder",
+  "input_channels": 3,
+  "latent_dim": 128,
+  "device": "cpu"
+}

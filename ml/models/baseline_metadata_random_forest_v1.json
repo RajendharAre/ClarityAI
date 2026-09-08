@@ -1,0 +1,24 @@
+{
+  "model_type": "random_forest",
+  "feature_names": [
+    "sharpness",
+    "brightness",
+    "contrast",
+    "noise_level",
+    "saturation",
+    "texture_complexity"
+  ],
+  "class_names": [
+    "ACCEPTABLE",
+    "DEGRADED",
+    "DEFECTIVE"
+  ],
+  "feature_importance": {
+    "sharpness": 0.20877569636077825,
+    "brightness": 0.1338789432639276,
+    "contrast": 0.12134863807468158,
+    "noise_level": 0.23025276736743247,
+    "saturation": 0.09729219314441968,
+    "texture_complexity": 0.20845176178876032
+  }
+}

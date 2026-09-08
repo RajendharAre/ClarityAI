@@ -1,0 +1,9 @@
+{
+  "timestamp": "2026-08-30T13:43:11.216042",
+  "baseline_model_path": "ml\\models\\baseline_model_random_forest_v1.joblib",
+  "deep_model_path": "ml\\models\\deep_model_autoencoder_v1.pt",
+  "training_samples": 96,
+  "test_samples": 36,
+  "baseline_accuracy": 0.5833333333333334,
+  "training_status": "COMPLETE"
+}

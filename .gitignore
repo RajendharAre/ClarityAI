@@ -59,13 +59,6 @@ build/
 .env.*.local
 
 # ==== Models & Data ====
-models/
-!models/.gitkeep
-*.pt
-*.pth
-*.joblib
-*.pkl
-*.pickle
 ml/data/
 !ml/data/.gitkeep
 ml/datasets/
