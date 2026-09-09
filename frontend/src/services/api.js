@@ -1,8 +1,10 @@
 import axios from 'axios'
 
+const BACKEND_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+
 const api = axios.create({
-  baseURL: '/api/v1',
-  timeout: 60000,
+  baseURL: BACKEND_URL,
+  timeout: 300000,
 })
 
 export async function analyzeImage(file) {
