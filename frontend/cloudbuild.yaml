@@ -1,0 +1,11 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/${PROJECT_ID}/clarityai-frontend:latest'
+      - '--build-arg'
+      - 'VITE_API_BASE_URL=${_API_BASE}'
+      - '.'
+images:
+  - 'gcr.io/${PROJECT_ID}/clarityai-frontend:latest'
