@@ -202,7 +202,7 @@ class TestImageValidation:
     def valid_image_file(self):
         """Create a temporary valid image file"""
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-            img = np.zeros((100, 100, 3), dtype=np.uint8)
+            img = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
             cv2.imwrite(tmp.name, img)
             yield tmp.name
         Path(tmp.name).unlink()
